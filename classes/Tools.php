@@ -2146,7 +2146,7 @@ class ToolsCore
     {
         $str = Tools::strtolower($str);
         $str = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $str)));
-        if (!$capitaliseFirstChar) {
+        if (!$catapitalise_first_char) {
             $str = lcfirst($str);
         }
         return $str;
