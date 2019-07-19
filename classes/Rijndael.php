@@ -43,13 +43,15 @@ class RijndaelCore
      */
     public function encrypt($plaintext)
     {
-        if (strlen($plaintext) >= 1048576) {
+        $length = strlen($plaintext);
+		if ($length >= 1048576) {
             return false;
         }
 
         $cipherText = null;
         if (function_exists('openssl_encrypt') && version_compare(phpversion(), '5.3.3', '>=')) {
             $cipherText = openssl_encrypt($plaintext, 'AES-128-CBC', $this->_key, OPENSSL_RAW_DATA, $this->_iv);
+            $output = base64_encode(sprintf('%06d', $length)). ':' . base64_encode($cipherText);
         } elseif (function_exists('mcrypt_encrypt')) {
             $ivSize = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_128, MCRYPT_MODE_CBC);
             $iv = mcrypt_create_iv($ivSize, MCRYPT_RAND);
@@ -64,11 +66,12 @@ class RijndaelCore
                 $iv
             );
             $cipherText = $iv.$cipherText;
+            $output = $this->generateHmac($cipherText) . ':' . base64_encode($cipherText);
         } else {
             throw new RuntimeException('Either Mcrypt or OpenSSL extension is required to run Prestashop');
         }
 
-        return $this->generateHmac($cipherText) . ':' . base64_encode($cipherText);
+        return $output;
     }
 
     public function decrypt($cipherText)
@@ -81,15 +84,17 @@ class RijndaelCore
         list($hmac, $encrypted) = $data;
 
         $encrypted = base64_decode($encrypted);
-        $newHmac = $this->generateHmac($encrypted);
-        if ($hmac !== $newHmac) {
-            return false;
-        }
 
         $output = null;
         if (function_exists('openssl_decrypt') && version_compare(phpversion(), '5.3.3', '>=')) {
             $output = openssl_decrypt($encrypted, 'AES-128-CBC', $this->_key, OPENSSL_RAW_DATA, $this->_iv);
+            if((int)strlen($output) != (int)base64_decode($hmac))
+				return false;
         } elseif (function_exists('mcrypt_decrypt')) {
+            $newHmac = $this->generateHmac($encrypted);
+            if ($hmac !== $newHmac) {
+                return false;
+            }           
             $ivSize = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_128, MCRYPT_MODE_CBC);
             $ivDec = substr($encrypted, 0, $ivSize);
             $encrypted = substr($encrypted, $ivSize);
